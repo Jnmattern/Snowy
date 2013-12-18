@@ -13,6 +13,7 @@ static TextLayer *hour;
 static GFont font;
 static char hourText[6] = "     ";
 static uint8_t h[144];
+static AppTimer *timer = NULL;
 
 typedef struct {
 	GPoint p;
@@ -28,6 +29,25 @@ static inline void newSnowFlake(int i, bool start) {
 	s->vs = (uint8_t)(1 + rand()%MAXSPEED);
 	s->c = rand()%MAXSTEPS;
 	s->r = (uint8_t)((int)s->vs*2/MAXSPEED);
+}
+
+static void initHeights() {
+	int i;
+	for (i=0; i<144; i++) {
+		h[i] = 168;
+	}
+}
+
+static void initSnowFlakes() {
+	int i;
+	for (i=0; i<NUMSNOWFLAKES; i++) {
+		newSnowFlake(i, true);
+	}
+}
+
+static inline void reset() {
+	initHeights();
+	initSnowFlakes();
 }
 
 static void stackSnowFlake(int i) {
@@ -46,7 +66,11 @@ static void stackSnowFlake(int i) {
 	} else if (h[r] > h[i]) {
 		stackSnowFlake(r);
 	} else {
-		h[i]--;
+		if (h[i] > 0) {
+			h[i]--;
+		} else {
+			reset();
+		}
 	}
 }
 
@@ -104,21 +128,7 @@ static void updateScreen(Layer *layer, GContext* ctx) {
 static void timerCallback(void *data) {
 	layer_mark_dirty(layer);
 	
-	app_timer_register(DELAY, timerCallback, NULL);
-}
-
-static void initSnowFlakes() {
-	int i;
-	for (i=0; i<NUMSNOWFLAKES; i++) {
-		newSnowFlake(i, true);
-	}		
-}
-
-static void initHeights() {
-	int i;
-	for (i=0; i<144; i++) {
-		h[i] = 168;
-	}
+	timer = app_timer_register(DELAY, timerCallback, NULL);
 }
 
 static inline void setHourText() {
@@ -131,7 +141,7 @@ static void minuteChange(struct tm *tick_time, TimeUnits units_changed) {
 }
 
 static void tapHandler(AccelAxisType axis, int32_t direction) {
-	initHeights();
+	reset();
 }
 
 static void init(void) {
@@ -142,9 +152,8 @@ static void init(void) {
 	rootLayer = window_get_root_layer(window);
 	
 	srand(time(NULL));
-	initHeights();
-	initSnowFlakes();
-
+	reset();
+	
 	font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_BORIS_47));
 	hour = text_layer_create(GRect(0, 64, 144, 80));
 	text_layer_set_background_color(hour, GColorClear);
@@ -158,7 +167,7 @@ static void init(void) {
 	layer_set_update_proc(layer, updateScreen);
 	layer_add_child(rootLayer, layer);
 	
-	app_timer_register(DELAY, timerCallback, NULL);
+	timer = app_timer_register(DELAY, timerCallback, NULL);
 	
 	tick_timer_service_subscribe(MINUTE_UNIT, minuteChange);
 	
@@ -169,6 +178,7 @@ static void init(void) {
 static void deinit(void) {
 	accel_tap_service_unsubscribe();
 	accel_data_service_unsubscribe();
+	if (timer != NULL) app_timer_cancel(timer);
 	tick_timer_service_unsubscribe();
 	layer_destroy(layer);
 	text_layer_destroy(hour);
