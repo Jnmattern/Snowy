@@ -1,0 +1,24 @@
+{
+  "uuid": "d4913449-977e-48e3-812d-dfc99c91f36f",
+  "shortName": "Snowy",
+  "longName": "Snowy",
+  "companyName": "Jnm",
+  "versionCode": 1,
+  "versionLabel": "1.0.0",
+  "watchapp": {
+    "watchface": true
+  },
+  "appKeys": {
+    "dummy": 0
+  },
+  "resources": {
+    "media": [
+      {
+        "type": "font",
+        "name": "FONT_BORIS_47",
+        "characterRegex": "[ :0-9]",
+        "file": "fonts/BorisBlackBloxx.ttf"
+      }
+    ]
+  }
+}
