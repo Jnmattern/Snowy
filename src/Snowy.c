@@ -9,11 +9,12 @@
 static Window *window;
 static Layer *rootLayer;
 static Layer *layer;
-static TextLayer *hour;
 static GFont font;
 static char hourText[6] = "     ";
 static uint8_t h[144];
 static AppTimer *timer = NULL;
+static GRect hourRect = { { 0, 60 }, {144, 80} };
+static GRect bgHourRect[4];
 
 typedef struct {
 	GPoint p;
@@ -48,6 +49,15 @@ static void initSnowFlakes() {
 static inline void reset() {
 	initHeights();
 	initSnowFlakes();
+}
+
+static void initHourRects() {
+	int i, dx, dy;
+	for (i=0; i<4; i++) {
+		dx = 2*(i%2) - 1;
+		dy = 2*(i/2) - 1;
+		bgHourRect[i] = GRect(hourRect.origin.x + 3*dx, hourRect.origin.y + 3*dy, hourRect.size.w, hourRect.size.h);
+	}
 }
 
 static void stackSnowFlake(int i) {
@@ -123,6 +133,13 @@ static void updateScreen(Layer *layer, GContext* ctx) {
 	for (i=0; i<144; i++) {
 		graphics_draw_line(ctx, GPoint(i, h[i]), GPoint(i, 168));
 	}
+	
+	graphics_context_set_text_color(ctx, GColorBlack);
+	for (i=0; i<4; i++) {
+		graphics_draw_text(ctx, hourText, font, bgHourRect[i], GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+	}
+	graphics_context_set_text_color(ctx, GColorWhite);
+	graphics_draw_text(ctx, hourText, font, hourRect, GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 }
 
 static void timerCallback(void *data) {
@@ -133,7 +150,6 @@ static void timerCallback(void *data) {
 
 static inline void setHourText() {
 	clock_copy_time_string(hourText, 6);
-	text_layer_set_text(hour, hourText);
 }
 	
 static void minuteChange(struct tm *tick_time, TimeUnits units_changed) {
@@ -152,21 +168,16 @@ static void init(void) {
 	rootLayer = window_get_root_layer(window);
 	
 	srand(time(NULL));
-	reset();
-	
-	font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_BORIS_47));
-	hour = text_layer_create(GRect(0, 64, 144, 80));
-	text_layer_set_background_color(hour, GColorClear);
-	text_layer_set_text_color(hour, GColorWhite);
-	text_layer_set_font(hour, font);
-	text_layer_set_text_alignment(hour, GTextAlignmentCenter);
-	layer_add_child(rootLayer, text_layer_get_layer(hour));
-	setHourText();
 	
 	layer = layer_create(GRect(0, 0, 144, 168));
 	layer_set_update_proc(layer, updateScreen);
 	layer_add_child(rootLayer, layer);
-	
+
+	font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_BORIS_47));
+	setHourText();
+	initHourRects();
+	reset();
+
 	timer = app_timer_register(DELAY, timerCallback, NULL);
 	
 	tick_timer_service_subscribe(MINUTE_UNIT, minuteChange);
@@ -181,7 +192,6 @@ static void deinit(void) {
 	if (timer != NULL) app_timer_cancel(timer);
 	tick_timer_service_unsubscribe();
 	layer_destroy(layer);
-	text_layer_destroy(hour);
 	fonts_unload_custom_font(font);
 	window_destroy(window);
 }
