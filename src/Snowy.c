@@ -1,7 +1,7 @@
 #include <pebble.h>
 
 #define DELAY 50
-#define NUMSNOWFLAKES 150
+#define NUMSNOWFLAKES 200
 #define MAXSPEED 3
 #define FUZZYNESS 2
 #define MAXSTEPS 10
