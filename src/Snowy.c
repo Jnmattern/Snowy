@@ -61,7 +61,7 @@ static void initHourRects() {
 }
 
 static void stackSnowFlake(int i) {
-	i %= 144;
+	i = (i+144)%144;
 	int l = (i+143)%144;
 	int r = (i+1)%144;
 	
