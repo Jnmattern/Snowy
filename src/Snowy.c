@@ -1,20 +1,49 @@
 #include <pebble.h>
 
 #define DELAY 50
-#define NUMSNOWFLAKES 200
 #define MAXSPEED 3
 #define FUZZYNESS 2
 #define MAXSTEPS 10
 
+//#define SHOWDATE
+
 static Window *window;
 static Layer *rootLayer;
 static Layer *layer;
-static GFont font;
+static GFont fontHour, fontDate;
+static char *pebbleLocale;
 static char hourText[6] = "     ";
-static uint8_t h[144];
+static char dateText[15] = "               ";
 static AppTimer *timer = NULL;
-static GRect hourRect = { { 0, 60 }, {144, 80} };
 static GRect bgHourRect[4];
+
+#if defined(SHOWDATE)
+static GRect bgDateRect[4];
+#endif
+
+#if defined(PBL_RECT)
+
+#define WIDTH 144
+#define HEIGHT 168
+#define NUMSNOWFLAKES 200
+static GRect hourRect = { { 0, 60 }, {144, 80} };
+#if defined(SHOWDATE)
+static GRect dateRect = { { 0, 120 }, {144, 48} };
+#endif
+
+#elif defined(PBL_ROUND)
+
+#define WIDTH 180
+#define HEIGHT 180
+#define NUMSNOWFLAKES 250
+static GRect hourRect = { { 0, 66 }, {180, 80} };
+#if defined(SHOWDATE)
+static GRect dateRect = { { 0, 126 }, {180, 48} };
+#endif
+
+#endif
+
+static uint8_t h[WIDTH];
 
 typedef struct {
 	GPoint p;
@@ -25,7 +54,7 @@ SnowFlake snowflakes[NUMSNOWFLAKES];
 
 static inline void newSnowFlake(int i, bool start) {
 	SnowFlake *s = &snowflakes[i];
-	s->p.x = rand()%144;
+	s->p.x = rand()%WIDTH;
 	s->p.y = start?rand()%h[s->p.x]:0;
 	s->vs = (uint8_t)(1 + rand()%MAXSPEED);
 	s->c = rand()%MAXSTEPS;
@@ -34,8 +63,8 @@ static inline void newSnowFlake(int i, bool start) {
 
 static void initHeights() {
 	int i;
-	for (i=0; i<144; i++) {
-		h[i] = 168;
+	for (i=0; i<WIDTH; i++) {
+		h[i] = HEIGHT;
 	}
 }
 
@@ -51,19 +80,22 @@ static inline void reset() {
 	initSnowFlakes();
 }
 
-static void initHourRects() {
+static void initRects() {
 	int i, dx, dy;
 	for (i=0; i<4; i++) {
 		dx = 2*(i%2) - 1;
 		dy = 2*(i/2) - 1;
 		bgHourRect[i] = GRect(hourRect.origin.x + 3*dx, hourRect.origin.y + 3*dy, hourRect.size.w, hourRect.size.h);
-	}
+#if defined(SHOWDATE)
+    bgDateRect[i] = GRect(dateRect.origin.x + 2*dx, dateRect.origin.y + 2*dy, dateRect.size.w, dateRect.size.h);
+#endif
+  }
 }
 
 static void stackSnowFlake(int i) {
-	i = (i+144)%144;
-	int l = (i+143)%144;
-	int r = (i+1)%144;
+	i = (i+WIDTH)%WIDTH;
+	int l = (i+WIDTH-1)%WIDTH;
+	int r = (i+1)%WIDTH;
 	
 	if ((h[l] > h[i]) && (h[r] > h[i])) {
 		if (rand()%2) {
@@ -118,11 +150,11 @@ static void updateScreen(Layer *layer, GContext* ctx) {
 		
 		s->p.x += d + w;
 		if (s->p.x < 0) {
-			s->p.x += 144;
+			s->p.x += WIDTH;
 		}
 		
-		if (s->p.x >= 144) {
-			s->p.x -= 144;
+		if (s->p.x >= WIDTH) {
+			s->p.x -= WIDTH;
 		}
 
 		s->p.y += s->vs;
@@ -130,16 +162,22 @@ static void updateScreen(Layer *layer, GContext* ctx) {
 		graphics_fill_circle(ctx, s->p, s->r);
 	}
 	
-	for (i=0; i<144; i++) {
-		graphics_draw_line(ctx, GPoint(i, h[i]), GPoint(i, 168));
+	for (i=0; i<WIDTH; i++) {
+		graphics_draw_line(ctx, GPoint(i, h[i]), GPoint(i, HEIGHT));
 	}
 	
 	graphics_context_set_text_color(ctx, GColorBlack);
 	for (i=0; i<4; i++) {
-		graphics_draw_text(ctx, hourText, font, bgHourRect[i], GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+		graphics_draw_text(ctx, hourText, fontHour, bgHourRect[i], GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+#if defined(SHOWDATE)
+    graphics_draw_text(ctx, dateText, fontDate, bgDateRect[i], GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+#endif
 	}
 	graphics_context_set_text_color(ctx, GColorWhite);
-	graphics_draw_text(ctx, hourText, font, hourRect, GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+	graphics_draw_text(ctx, hourText, fontHour, hourRect, GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+#if defined(SHOWDATE)
+  graphics_draw_text(ctx, dateText, fontDate, dateRect, GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+#endif
 }
 
 static void timerCallback(void *data) {
@@ -148,12 +186,18 @@ static void timerCallback(void *data) {
 	timer = app_timer_register(DELAY, timerCallback, NULL);
 }
 
-static inline void setHourText() {
+static inline void setText() {
+  time_t now = time(NULL);
+  struct tm *theTime = localtime(&now);
+
 	clock_copy_time_string(hourText, 6);
+#if defined(SHOWDATE)
+  strftime(dateText, sizeof(dateText), "%a %e %b", theTime);
+#endif
 }
 	
 static void minuteChange(struct tm *tick_time, TimeUnits units_changed) {
-	setHourText();
+	setText();
 }
 
 static void tapHandler(AccelAxisType axis, int32_t direction) {
@@ -161,6 +205,8 @@ static void tapHandler(AccelAxisType axis, int32_t direction) {
 }
 
 static void init(void) {
+  pebbleLocale = setlocale(LC_ALL, "");
+
 	window = window_create();
 	window_set_background_color(window, GColorBlack);
 	window_stack_push(window, true);
@@ -169,13 +215,17 @@ static void init(void) {
 	
 	srand(time(NULL));
 	
-	layer = layer_create(GRect(0, 0, 144, 168));
+	layer = layer_create(GRect(0, 0, WIDTH, HEIGHT));
 	layer_set_update_proc(layer, updateScreen);
 	layer_add_child(rootLayer, layer);
 
-	font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_BORIS_47));
-	setHourText();
-	initHourRects();
+  fontHour = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_BORIS_47));
+#if defined(SHOWDATE)
+  fontDate = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_BORIS_18));
+#endif
+
+	setText();
+	initRects();
 	reset();
 
 	timer = app_timer_register(DELAY, timerCallback, NULL);
@@ -192,7 +242,8 @@ static void deinit(void) {
 	if (timer != NULL) app_timer_cancel(timer);
 	tick_timer_service_unsubscribe();
 	layer_destroy(layer);
-	fonts_unload_custom_font(font);
+  fonts_unload_custom_font(fontHour);
+  fonts_unload_custom_font(fontDate);
 	window_destroy(window);
 }
 
